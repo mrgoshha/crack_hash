@@ -1,0 +1,92 @@
+services:
+  manager:
+    image: manager
+    container_name: manager-container
+    depends_on:
+      - mongo-primary
+      - mongo-secondary1
+      - mongo-secondary2
+      - rabbitmq-1
+      - worker1
+      - worker2
+    ports:
+      - 8080:8080
+    networks:
+      - mongo-cluster
+    command: ./manager -mongourl=mongodb://mongo-primary:27017,mongo-secondary1:27018,mongo-secondary2:27019/?replicaSet=rs0 -rabbiturl=amqp://guest:guest@rabbitmq-1:5672/
+  worker1:
+    image: worker
+    container_name: worker-container-1
+    depends_on:
+      - rabbitmq-1
+    ports:
+      - 5535:5535
+    networks:
+      - mongo-cluster
+    command: ./worker -baseurl=:5535 -rabbiturl=amqp://guest:guest@rabbitmq-1:5672/
+  worker2:
+    image: worker
+    container_name: worker-container-2
+    depends_on:
+      - rabbitmq-1
+    ports:
+      - 5545:5545
+    networks:
+      - mongo-cluster
+    command: ./worker -baseurl=:5545 -rabbiturl=amqp://guest:guest@rabbitmq-1:5672/
+  mongo-primary:
+    image: mongo:4.4.6
+    container_name: mongo-primary
+    command: mongod --replSet rs0 --bind_ip_all
+    volumes:
+      - mongo-primary-data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
+    ports:
+      - "27017:27017"
+    networks:
+      - mongo-cluster
+  mongo-secondary1:
+    image: mongo:4.4.6
+    container_name: mongo-secondary1
+    command: mongod --replSet rs0 --bind_ip_all
+    volumes:
+      - mongo-secondary1-data:/data/db
+    depends_on:
+      - mongo-primary
+    ports:
+      - "27018:27017"
+    networks:
+      - mongo-cluster
+  mongo-secondary2:
+    image: mongo:4.4.6
+    container_name: mongo-secondary2
+    command: mongod --replSet rs0 --bind_ip_all
+    volumes:
+      - mongo-secondary2-data:/data/db
+    depends_on:
+      - mongo-primary
+    ports:
+      - "27019:27017"
+    networks:
+      - mongo-cluster
+  rabbitmq-1:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - mongo-cluster
+
+networks:
+  mongo-cluster:
+    name: mongo-cluster
+    driver: bridge
+
+volumes:
+  mongo-primary-data:
+  mongo-secondary1-data:
+  mongo-secondary2-data:
+  rabbitmq-data:
+
